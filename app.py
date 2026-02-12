@@ -2,6 +2,7 @@ import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk
 import json
+import numpy as np
 from convertisseur_simple import image_vers_matrice_simple
 from convertisseur import image_vers_matrice
 
@@ -12,7 +13,7 @@ class PixelArtApp(ctk.CTk):
 
         # Configuration fenêtre
         self.title("Convertisseur Pixel Art")
-        self.geometry("700x800")
+        self.geometry("700x900")
 
         # Variables
         self.image_path = None
@@ -21,6 +22,7 @@ class PixelArtApp(ctk.CTk):
         self.height = None
         self.palette = None
         self.preview_image = None
+        self.base_image = None  # Cache image
 
         # Mode sombre
         ctk.set_appearance_mode("dark")
@@ -94,6 +96,27 @@ class PixelArtApp(ctk.CTk):
         )
         colors_menu.grid(row=2, column=1, columnspan=2, padx=5, pady=10, sticky="w")
 
+        # Zoom
+        ctk.CTkLabel(options_frame, text="Zoom:", font=("Helvetica", 12)).grid(
+            row=3, column=0, padx=10, pady=10, sticky="w"
+        )
+
+        self.zoom_var = ctk.IntVar(value=10)
+        self.zoom_slider = ctk.CTkSlider(
+            options_frame,
+            from_=5,
+            to=30,
+            variable=self.zoom_var,
+            number_of_steps=25,
+            command=self.update_zoom_label,
+        )
+        self.zoom_slider.grid(row=3, column=1, padx=5, pady=10, sticky="ew")
+
+        self.zoom_label = ctk.CTkLabel(
+            options_frame, text="10x", font=("Helvetica", 12)
+        )
+        self.zoom_label.grid(row=3, column=2, padx=5, pady=10)
+
         # Message d'erreur/succès
         self.message_label = ctk.CTkLabel(
             self, text="", font=("Helvetica", 12), height=30
@@ -118,7 +141,13 @@ class PixelArtApp(ctk.CTk):
             preview_frame, text="Prévisualisation", font=("Helvetica", 16, "bold")
         ).pack(pady=10)
 
-        self.preview_label = ctk.CTkLabel(preview_frame, text="")
+        # Frame scrollable
+        self.preview_scroll = ctk.CTkScrollableFrame(
+            preview_frame, width=600, height=400
+        )
+        self.preview_scroll.pack(pady=10, fill="both", expand=True)
+
+        self.preview_label = ctk.CTkLabel(self.preview_scroll, text="")
         self.preview_label.pack(pady=10, expand=True)
 
     def choose_file(self):
@@ -134,6 +163,14 @@ class PixelArtApp(ctk.CTk):
             filename = file_path.split("/")[-1].split("\\")[-1]
             self.file_label.configure(text=filename)
 
+    def update_zoom_label(self, value):
+        """Met à jour le label du zoom EN TEMPS RÉEL"""
+        self.zoom_label.configure(text=f"{int(value)}x")
+
+        # Régénérer immédiatement
+        if self.matrice is not None:
+            self.generate_preview()
+
     def convert_image(self):
         """Convertit l'image avec l'algorithme choisi"""
         # Effacer ancien message
@@ -148,7 +185,7 @@ class PixelArtApp(ctk.CTk):
             algo = self.algo_var.get()
 
             if algo == "simple":
-                # Algorithme simple RGBA simple (sans palette)
+                # Algorithme RGBA simple (sans palette)
                 self.matrice, self.width, self.height = image_vers_matrice(
                     self.image_path, size
                 )
@@ -160,57 +197,98 @@ class PixelArtApp(ctk.CTk):
                     image_vers_matrice_simple(self.image_path, size, nb_colors)
                 )
 
+            # Créer image de base (une seule fois)
+            self.creer_image_base()
+
             # Générer prévisualisation
             self.generate_preview()
 
             # Message de succès
-            self.show_success(f"Image convertie en {self.width}x{self.height} !")
+            self.show_success(f"✅ Image convertie en {self.width}x{self.height} !")
 
         except Exception as e:
             self.show_error(f"❌ Erreur : {str(e)}")
 
-    def generate_preview(self):
-        """Génère l'aperçu de l'image convertie"""
-        scale = 10
-
+    def creer_image_base(self):
+        """Crée l'image de base en taille réelle (appelée une seule fois)"""
         if self.algo_var.get() == "simple":
-            # Simple RGBA
-            img = Image.new(
-                "RGBA", (self.width * scale, self.height * scale), (0, 0, 0, 0)
-            )
-            pixels = img.load()
-
-            for y in range(self.height):
-                for x in range(self.width):
-                    r, g, b, a = self.matrice[y][x]
-                    for sy in range(scale):
-                        for sx in range(scale):
-                            pixels[x * scale + sx, y * scale + sy] = (r, g, b, a)
+            # Convertir matrice RGBA en array NumPy
+            arr = np.array(self.matrice, dtype=np.uint8)
+            self.base_image = Image.fromarray(arr, mode="RGBA")
         else:
             # K-means avec palette
-            img = Image.new(
-                "RGBA", (self.width * scale, self.height * scale), (0, 0, 0, 0)
+            colors_palette = np.array(
+                [(0, 0, 0, 0)] + [(r, g, b, 255) for r, g, b in self.palette],
+                dtype=np.uint8,
             )
-            pixels = img.load()
-            colors_palette = [(0, 0, 0, 0)] + [
-                (r, g, b, 255) for r, g, b in self.palette
-            ]
 
-            for y in range(self.height):
-                for x in range(self.width):
-                    color_id = self.matrice[y][x]
-                    color = colors_palette[color_id]
-                    for sy in range(scale):
-                        for sx in range(scale):
-                            pixels[x * scale + sx, y * scale + sy] = color
+            # Mapper les indices vers les couleurs
+            arr = np.array(self.matrice, dtype=np.uint8)
+            img_array = colors_palette[arr]
+            self.base_image = Image.fromarray(img_array, mode="RGBA")
 
-        # Redimensionner pour l'affichage (max 400x400)
-        max_size = 400
-        if img.width > max_size or img.height > max_size:
-            img.thumbnail((max_size, max_size), Image.Resampling.NEAREST)
+    def generate_preview(self):
+        """Génère l'aperçu de l'image convertie avec zoom centré"""
+        if self.base_image is None:
+            return
+
+        # Sauvegarder position scroll actuelle (en %)
+        try:
+            scroll_x = self.preview_scroll._parent_canvas.xview()[0]
+            scroll_y = self.preview_scroll._parent_canvas.yview()[0]
+
+            # Taille visible
+            canvas_width = self.preview_scroll._parent_canvas.winfo_width()
+            canvas_height = self.preview_scroll._parent_canvas.winfo_height()
+
+            # Taille ancienne image
+            old_scale = getattr(self, "last_scale", self.zoom_var.get())
+            old_width = self.width * old_scale
+            old_height = self.height * old_scale
+
+            # Position centrale actuelle
+            center_x = (
+                scroll_x + (canvas_width / 2) / old_width if old_width > 0 else 0.5
+            )
+            center_y = (
+                scroll_y + (canvas_height / 2) / old_height if old_height > 0 else 0.5
+            )
+        except:
+            center_x = 0.5
+            center_y = 0.5
+
+        scale = self.zoom_var.get()
+        self.last_scale = scale
+
+        # Resize avec NEAREST (instantané)
+        img = self.base_image.resize(
+            (self.width * scale, self.height * scale), Image.Resampling.NEAREST
+        )
 
         self.preview_image = ImageTk.PhotoImage(img)
         self.preview_label.configure(image=self.preview_image, text="")
+
+        # Recentrer après rendu
+        self.after(10, lambda: self.recentrer_scroll(center_x, center_y))
+
+    def recentrer_scroll(self, center_x, center_y):
+        """Recentre le scroll après zoom"""
+        try:
+            canvas = self.preview_scroll._parent_canvas
+            canvas_width = canvas.winfo_width()
+            canvas_height = canvas.winfo_height()
+
+            new_width = self.width * self.zoom_var.get()
+            new_height = self.height * self.zoom_var.get()
+
+            # Calculer nouvelle position pour garder le centre
+            new_scroll_x = max(0, center_x - (canvas_width / 2) / new_width)
+            new_scroll_y = max(0, center_y - (canvas_height / 2) / new_height)
+
+            canvas.xview_moveto(new_scroll_x)
+            canvas.yview_moveto(new_scroll_y)
+        except:
+            pass
 
     def show_error(self, message):
         """Affiche un message d'erreur avec animation"""
