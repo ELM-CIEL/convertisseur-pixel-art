@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, Canvas
 from PIL import Image, ImageTk
 import json
 import numpy as np
@@ -23,6 +23,14 @@ class PixelArtApp(ctk.CTk):
         self.palette = None
         self.preview_image = None
         self.base_image = None  # Cache image
+
+        # Variables drag
+        self.drag_start_x = 0
+        self.drag_start_y = 0
+        self.is_dragging = False
+
+        # Variable zoom
+        self.last_zoom = 10
 
         # Mode sombre
         ctk.set_appearance_mode("dark")
@@ -139,16 +147,27 @@ class PixelArtApp(ctk.CTk):
 
         ctk.CTkLabel(
             preview_frame, text="Prévisualisation", font=("Helvetica", 16, "bold")
-        ).pack(pady=10)
+        ).pack(pady=(10, 5))
 
-        # Frame scrollable
-        self.preview_scroll = ctk.CTkScrollableFrame(
-            preview_frame, width=600, height=400
-        )
-        self.preview_scroll.pack(pady=10, fill="both", expand=True)
+        # Canvas pour affichage avec drag
+        self.canvas = Canvas(preview_frame, bg="#1a1a1a", highlightthickness=0)
+        self.canvas.pack(pady=(0, 10), padx=10, fill="both", expand=True)
 
-        self.preview_label = ctk.CTkLabel(self.preview_scroll, text="")
-        self.preview_label.pack(pady=10, expand=True)
+        # Bind événements drag
+        self.canvas.bind("<ButtonPress-1>", self.start_drag)
+        self.canvas.bind("<B1-Motion>", self.on_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.stop_drag)
+
+        # Bind événements molette
+        self.canvas.bind("<MouseWheel>", self.zoom_molette)
+        self.canvas.bind("<Button-4>", self.zoom_molette)  # Linux scroll up
+        self.canvas.bind("<Button-5>", self.zoom_molette)  # Linux scroll down
+
+        # Bind resize canvas
+        self.canvas.bind("<Configure>", self.on_canvas_resize)
+
+        # ID de l'image sur le canvas
+        self.canvas_image_id = None
 
     def choose_file(self):
         """Ouvre l'explorateur pour choisir une image"""
@@ -163,13 +182,123 @@ class PixelArtApp(ctk.CTk):
             filename = file_path.split("/")[-1].split("\\")[-1]
             self.file_label.configure(text=filename)
 
+    def on_canvas_resize(self, event):
+        """Gère le redimensionnement du canvas"""
+        # Pas besoin de régénérer
+        pass
+
+    def start_drag(self, event):
+        """Démarre le drag"""
+        self.is_dragging = True
+        self.drag_start_x = event.x
+        self.drag_start_y = event.y
+
+    def on_drag(self, event):
+        """Gère le déplacement pendant le drag"""
+        if not self.is_dragging or self.canvas_image_id is None:
+            return
+
+        # Calculer le déplacement
+        dx = event.x - self.drag_start_x
+        dy = event.y - self.drag_start_y
+
+        # Déplacer l'image
+        self.canvas.move(self.canvas_image_id, dx, dy)
+
+        # Mettre à jour position de départ
+        self.drag_start_x = event.x
+        self.drag_start_y = event.y
+
+    def stop_drag(self, event):
+        """Arrête le drag"""
+        self.is_dragging = False
+
+    def zoom_molette(self, event):
+        """Zoom avec la molette centré sur le curseur"""
+        if self.matrice is None or self.canvas_image_id is None:
+            return
+
+        # Déterminer direction du scroll
+        if event.num == 5 or event.delta < 0:  # Scroll bas
+            direction = -1
+        elif event.num == 4 or event.delta > 0:  # Scroll haut
+            direction = 1
+        else:
+            return
+
+        # Calculer nouveau zoom
+        current_zoom = self.zoom_var.get()
+        new_zoom = current_zoom + (direction * 2)
+        new_zoom = max(5, min(30, new_zoom))  # Limiter entre 5 et 30
+
+        if new_zoom == current_zoom:
+            return
+
+        # Obtenir position actuelle de l'image
+        img_coords = self.canvas.coords(self.canvas_image_id)
+        if not img_coords:
+            return
+
+        img_x, img_y = img_coords[0], img_coords[1]
+
+        # Position du curseur par rapport au centre de l'image
+        cursor_x = event.x
+        cursor_y = event.y
+
+        # Distance du curseur au centre de l'image
+        dx = cursor_x - img_x
+        dy = cursor_y - img_y
+
+        # Ratio de zoom
+        zoom_ratio = new_zoom / current_zoom
+
+        # Nouvelle position pour garder le curseur sur le même point
+        new_img_x = cursor_x - (dx * zoom_ratio)
+        new_img_y = cursor_y - (dy * zoom_ratio)
+
+        # Mettre à jour le slider et mémoriser
+        self.zoom_var.set(new_zoom)
+        self.zoom_label.configure(text=f"{new_zoom}x")
+        self.last_zoom = new_zoom
+
+        # Régénérer la preview à la nouvelle position
+        self.generate_preview_at_position(new_img_x, new_img_y)
+
     def update_zoom_label(self, value):
-        """Met à jour le label du zoom EN TEMPS RÉEL"""
+        """Met à jour le label du zoom"""
         self.zoom_label.configure(text=f"{int(value)}x")
 
-        # Régénérer immédiatement
-        if self.matrice is not None:
-            self.generate_preview()
+        # Régénérer immédiatement en gardant la position
+        if self.matrice is not None and self.canvas_image_id is not None:
+            # Récupérer position actuelle de l'image
+            img_coords = self.canvas.coords(self.canvas_image_id)
+            if img_coords:
+                current_x, current_y = img_coords[0], img_coords[1]
+
+                # Calculer le centre du canvas
+                self.canvas.update_idletasks()
+                canvas_width = self.canvas.winfo_width()
+                canvas_height = self.canvas.winfo_height()
+                canvas_center_x = canvas_width // 2
+                canvas_center_y = canvas_height // 2
+
+                # Distance du centre de l'image au centre du canvas
+                dx = current_x - canvas_center_x
+                dy = current_y - canvas_center_y
+
+                # Ratio de zoom
+                old_zoom = self.last_zoom
+                new_zoom = int(value)
+                zoom_ratio = new_zoom / old_zoom if old_zoom > 0 else 1
+
+                # Nouvelle position proportionnelle
+                new_x = canvas_center_x + (dx * zoom_ratio)
+                new_y = canvas_center_y + (dy * zoom_ratio)
+
+                self.last_zoom = new_zoom
+                self.generate_preview_at_position(new_x, new_y)
+            else:
+                self.generate_preview()
 
     def convert_image(self):
         """Convertit l'image avec l'algorithme choisi"""
@@ -228,37 +357,43 @@ class PixelArtApp(ctk.CTk):
             self.base_image = Image.fromarray(img_array, mode="RGBA")
 
     def generate_preview(self):
-        """Génère l'aperçu de l'image convertie avec zoom centré"""
+        """Génère l'aperçu de l'image convertie"""
         if self.base_image is None:
             return
 
-        # Sauvegarder position scroll actuelle (en %)
-        try:
-            scroll_x = self.preview_scroll._parent_canvas.xview()[0]
-            scroll_y = self.preview_scroll._parent_canvas.yview()[0]
+        scale = self.zoom_var.get()
+        self.last_zoom = scale  # Mémoriser le zoom
 
-            # Taille visible
-            canvas_width = self.preview_scroll._parent_canvas.winfo_width()
-            canvas_height = self.preview_scroll._parent_canvas.winfo_height()
+        # Resize avec NEAREST
+        img = self.base_image.resize(
+            (self.width * scale, self.height * scale), Image.Resampling.NEAREST
+        )
 
-            # Taille ancienne image
-            old_scale = getattr(self, "last_scale", self.zoom_var.get())
-            old_width = self.width * old_scale
-            old_height = self.height * old_scale
+        self.preview_image = ImageTk.PhotoImage(img)
 
-            # Position centrale actuelle
-            center_x = (
-                scroll_x + (canvas_width / 2) / old_width if old_width > 0 else 0.5
-            )
-            center_y = (
-                scroll_y + (canvas_height / 2) / old_height if old_height > 0 else 0.5
-            )
-        except:
-            center_x = 0.5
-            center_y = 0.5
+        # Supprimer ancienne image si existe
+        if self.canvas_image_id:
+            self.canvas.delete(self.canvas_image_id)
+
+        # Attendre que le canvas soit bien dimensionné
+        self.canvas.update_idletasks()
+
+        # Centrer l'image sur le canvas
+        canvas_width = self.canvas.winfo_width()
+        canvas_height = self.canvas.winfo_height()
+        x = canvas_width // 2 if canvas_width > 1 else 300
+        y = canvas_height // 2 if canvas_height > 1 else 200
+
+        self.canvas_image_id = self.canvas.create_image(
+            x, y, image=self.preview_image, anchor="center"
+        )
+
+    def generate_preview_at_position(self, x, y):
+        """Génère la preview à une position spécifique"""
+        if self.base_image is None:
+            return
 
         scale = self.zoom_var.get()
-        self.last_scale = scale
 
         # Resize avec NEAREST (instantané)
         img = self.base_image.resize(
@@ -266,29 +401,15 @@ class PixelArtApp(ctk.CTk):
         )
 
         self.preview_image = ImageTk.PhotoImage(img)
-        self.preview_label.configure(image=self.preview_image, text="")
 
-        # Recentrer après rendu
-        self.after(10, lambda: self.recentrer_scroll(center_x, center_y))
+        # Supprimer ancienne image si existe
+        if self.canvas_image_id:
+            self.canvas.delete(self.canvas_image_id)
 
-    def recentrer_scroll(self, center_x, center_y):
-        """Recentre le scroll après zoom"""
-        try:
-            canvas = self.preview_scroll._parent_canvas
-            canvas_width = canvas.winfo_width()
-            canvas_height = canvas.winfo_height()
-
-            new_width = self.width * self.zoom_var.get()
-            new_height = self.height * self.zoom_var.get()
-
-            # Calculer nouvelle position pour garder le centre
-            new_scroll_x = max(0, center_x - (canvas_width / 2) / new_width)
-            new_scroll_y = max(0, center_y - (canvas_height / 2) / new_height)
-
-            canvas.xview_moveto(new_scroll_x)
-            canvas.yview_moveto(new_scroll_y)
-        except:
-            pass
+        # Placer l'image à la position spécifiée
+        self.canvas_image_id = self.canvas.create_image(
+            x, y, image=self.preview_image, anchor="center"
+        )
 
     def show_error(self, message):
         """Affiche un message d'erreur avec animation"""
