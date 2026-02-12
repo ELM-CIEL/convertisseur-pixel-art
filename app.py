@@ -13,7 +13,7 @@ class PixelArtApp(ctk.CTk):
 
         # Configuration fenêtre
         self.title("Convertisseur Pixel Art")
-        self.geometry("700x900")
+        self.geometry("700x950")
 
         # Variables
         self.image_path = None
@@ -141,7 +141,40 @@ class PixelArtApp(ctk.CTk):
         )
         convert_btn.pack(pady=20)
 
-        # Prévisualisation
+        # Frame pour l'export
+        export_frame = ctk.CTkFrame(self, fg_color="transparent")
+        export_frame.pack(pady=(0, 20))
+
+        # Label format
+        ctk.CTkLabel(export_frame, text="Format :", font=("Helvetica", 12)).pack(
+            side="left", padx=(0, 10)
+        )
+
+        # Menu format
+        self.export_format_var = ctk.StringVar(value="JSON")
+        export_format_menu = ctk.CTkOptionMenu(
+            export_frame,
+            values=["JSON", "JS", "Image PNG"],
+            variable=self.export_format_var,
+            width=120,
+        )
+        export_format_menu.pack(side="left", padx=5)
+
+        # Bouton Exporter
+        self.export_btn = ctk.CTkButton(
+            export_frame,
+            text="Exporter",
+            command=self.export_data,
+            font=("Helvetica", 14, "bold"),
+            height=40,
+            width=150,
+            state="disabled",
+            fg_color="#2b7a2b",
+            hover_color="#3a9a3a",
+        )
+        self.export_btn.pack(side="left", padx=10)
+
+        # Prévisualisation (prend tout l'espace restant)
         preview_frame = ctk.CTkFrame(self)
         preview_frame.pack(pady=10, padx=20, fill="both", expand=True)
 
@@ -149,7 +182,7 @@ class PixelArtApp(ctk.CTk):
             preview_frame, text="Prévisualisation", font=("Helvetica", 16, "bold")
         ).pack(pady=(10, 5))
 
-        # Canvas pour affichage avec drag
+        # Canvas pour affichage avec drag (prend tout l'espace)
         self.canvas = Canvas(preview_frame, bg="#1a1a1a", highlightthickness=0)
         self.canvas.pack(pady=(0, 10), padx=10, fill="both", expand=True)
 
@@ -160,8 +193,8 @@ class PixelArtApp(ctk.CTk):
 
         # Bind événements molette
         self.canvas.bind("<MouseWheel>", self.zoom_molette)
-        self.canvas.bind("<Button-4>", self.zoom_molette)  # Linux scroll up
-        self.canvas.bind("<Button-5>", self.zoom_molette)  # Linux scroll down
+        self.canvas.bind("<Button-4>", self.zoom_molette)
+        self.canvas.bind("<Button-5>", self.zoom_molette)
 
         # Bind resize canvas
         self.canvas.bind("<Configure>", self.on_canvas_resize)
@@ -178,13 +211,11 @@ class PixelArtApp(ctk.CTk):
 
         if file_path:
             self.image_path = file_path
-            # Afficher le nom du fichier
             filename = file_path.split("/")[-1].split("\\")[-1]
             self.file_label.configure(text=filename)
 
     def on_canvas_resize(self, event):
         """Gère le redimensionnement du canvas"""
-        # Pas besoin de régénérer
         pass
 
     def start_drag(self, event):
@@ -198,14 +229,11 @@ class PixelArtApp(ctk.CTk):
         if not self.is_dragging or self.canvas_image_id is None:
             return
 
-        # Calculer le déplacement
         dx = event.x - self.drag_start_x
         dy = event.y - self.drag_start_y
 
-        # Déplacer l'image
         self.canvas.move(self.canvas_image_id, dx, dy)
 
-        # Mettre à jour position de départ
         self.drag_start_x = event.x
         self.drag_start_y = event.y
 
@@ -218,80 +246,64 @@ class PixelArtApp(ctk.CTk):
         if self.matrice is None or self.canvas_image_id is None:
             return
 
-        # Déterminer direction du scroll
-        if event.num == 5 or event.delta < 0:  # Scroll bas
+        if event.num == 5 or event.delta < 0:
             direction = -1
-        elif event.num == 4 or event.delta > 0:  # Scroll haut
+        elif event.num == 4 or event.delta > 0:
             direction = 1
         else:
             return
 
-        # Calculer nouveau zoom
         current_zoom = self.zoom_var.get()
         new_zoom = current_zoom + (direction * 2)
-        new_zoom = max(5, min(30, new_zoom))  # Limiter entre 5 et 30
+        new_zoom = max(5, min(30, new_zoom))
 
         if new_zoom == current_zoom:
             return
 
-        # Obtenir position actuelle de l'image
         img_coords = self.canvas.coords(self.canvas_image_id)
         if not img_coords:
             return
 
         img_x, img_y = img_coords[0], img_coords[1]
-
-        # Position du curseur par rapport au centre de l'image
         cursor_x = event.x
         cursor_y = event.y
 
-        # Distance du curseur au centre de l'image
         dx = cursor_x - img_x
         dy = cursor_y - img_y
 
-        # Ratio de zoom
         zoom_ratio = new_zoom / current_zoom
 
-        # Nouvelle position pour garder le curseur sur le même point
         new_img_x = cursor_x - (dx * zoom_ratio)
         new_img_y = cursor_y - (dy * zoom_ratio)
 
-        # Mettre à jour le slider et mémoriser
         self.zoom_var.set(new_zoom)
         self.zoom_label.configure(text=f"{new_zoom}x")
         self.last_zoom = new_zoom
 
-        # Régénérer la preview à la nouvelle position
         self.generate_preview_at_position(new_img_x, new_img_y)
 
     def update_zoom_label(self, value):
         """Met à jour le label du zoom"""
         self.zoom_label.configure(text=f"{int(value)}x")
 
-        # Régénérer immédiatement en gardant la position
         if self.matrice is not None and self.canvas_image_id is not None:
-            # Récupérer position actuelle de l'image
             img_coords = self.canvas.coords(self.canvas_image_id)
             if img_coords:
                 current_x, current_y = img_coords[0], img_coords[1]
 
-                # Calculer le centre du canvas
                 self.canvas.update_idletasks()
                 canvas_width = self.canvas.winfo_width()
                 canvas_height = self.canvas.winfo_height()
                 canvas_center_x = canvas_width // 2
                 canvas_center_y = canvas_height // 2
 
-                # Distance du centre de l'image au centre du canvas
                 dx = current_x - canvas_center_x
                 dy = current_y - canvas_center_y
 
-                # Ratio de zoom
                 old_zoom = self.last_zoom
                 new_zoom = int(value)
                 zoom_ratio = new_zoom / old_zoom if old_zoom > 0 else 1
 
-                # Nouvelle position proportionnelle
                 new_x = canvas_center_x + (dx * zoom_ratio)
                 new_y = canvas_center_y + (dy * zoom_ratio)
 
@@ -302,7 +314,6 @@ class PixelArtApp(ctk.CTk):
 
     def convert_image(self):
         """Convertit l'image avec l'algorithme choisi"""
-        # Effacer ancien message
         self.message_label.configure(text="", text_color="white")
 
         if not self.image_path:
@@ -314,44 +325,93 @@ class PixelArtApp(ctk.CTk):
             algo = self.algo_var.get()
 
             if algo == "simple":
-                # Algorithme RGBA simple (sans palette)
                 self.matrice, self.width, self.height = image_vers_matrice(
                     self.image_path, size
                 )
                 self.palette = None
             else:
-                # Algorithme K-means (avec palette)
                 nb_colors = int(self.colors_var.get())
                 self.matrice, self.width, self.height, self.palette = (
                     image_vers_matrice_simple(self.image_path, size, nb_colors)
                 )
 
-            # Créer image de base (une seule fois)
             self.creer_image_base()
-
-            # Générer prévisualisation
             self.generate_preview()
 
-            # Message de succès
-            self.show_success(f"✅ Image convertie en {self.width}x{self.height} !")
+            # Activer le bouton exporter
+            self.export_btn.configure(state="normal")
+
+            self.show_success(f"Image convertie en {self.width}x{self.height} !")
 
         except Exception as e:
             self.show_error(f"❌ Erreur : {str(e)}")
 
+    def export_data(self):
+        """Exporte selon le format choisi"""
+        if self.matrice is None:
+            self.show_error("⚠️ Aucune image convertie !")
+            return
+
+        format_type = self.export_format_var.get()
+
+        try:
+            if format_type == "JSON":
+                self.export_json()
+            elif format_type == "JS":
+                self.export_js()
+            elif format_type == "Image PNG":
+                self.export_image()
+        except Exception as e:
+            self.show_error(f"❌ Erreur export : {str(e)}")
+
+    def export_js(self):
+        """Exporte en JS"""
+        file_path = filedialog.asksaveasfilename(
+            title="Exporter JS",
+            defaultextension=".js",
+            filetypes=[("JavaScript", "*.js"), ("Tous", "*.*")],
+        )
+
+        if not file_path:
+            return
+
+        with open(file_path, "w") as f:
+            f.write(f"const pixel = {json.dumps(self.matrice)};\n")
+            f.write(f"const width = {self.width};\n")
+            f.write(f"const height = {self.height};\n")
+
+            if self.palette:
+                palette_rgb = [f"rgb({r}, {g}, {b})" for r, g, b in self.palette]
+                f.write(f"const palette = {json.dumps(palette_rgb)};\n")
+
+        self.show_success(f"Exporté : {file_path.split('/')[-1].split(chr(92))[-1]}")
+
+    def export_image(self):
+        """Exporte l'image pixelisée en PNG"""
+        file_path = filedialog.asksaveasfilename(
+            title="Exporter Image",
+            defaultextension=".png",
+            filetypes=[("PNG", "*.png"), ("Tous", "*.*")],
+        )
+
+        if not file_path:
+            return
+
+        # Utiliser l'image de base (taille réelle, pas zoomée)
+        self.base_image.save(file_path, "PNG")
+
+        self.show_success(f"Exporté : {file_path.split('/')[-1].split(chr(92))[-1]}")
+
     def creer_image_base(self):
-        """Crée l'image de base en taille réelle (appelée une seule fois)"""
+        """Crée l'image de base en taille réelle"""
         if self.algo_var.get() == "simple":
-            # Convertir matrice RGBA en array NumPy
             arr = np.array(self.matrice, dtype=np.uint8)
             self.base_image = Image.fromarray(arr, mode="RGBA")
         else:
-            # K-means avec palette
             colors_palette = np.array(
                 [(0, 0, 0, 0)] + [(r, g, b, 255) for r, g, b in self.palette],
                 dtype=np.uint8,
             )
-
-            # Mapper les indices vers les couleurs
             arr = np.array(self.matrice, dtype=np.uint8)
             img_array = colors_palette[arr]
             self.base_image = Image.fromarray(img_array, mode="RGBA")
@@ -364,21 +424,16 @@ class PixelArtApp(ctk.CTk):
         scale = self.zoom_var.get()
         self.last_zoom = scale  # Mémoriser le zoom
 
-        # Resize avec NEAREST
         img = self.base_image.resize(
             (self.width * scale, self.height * scale), Image.Resampling.NEAREST
         )
 
         self.preview_image = ImageTk.PhotoImage(img)
 
-        # Supprimer ancienne image si existe
         if self.canvas_image_id:
             self.canvas.delete(self.canvas_image_id)
 
-        # Attendre que le canvas soit bien dimensionné
         self.canvas.update_idletasks()
-
-        # Centrer l'image sur le canvas
         canvas_width = self.canvas.winfo_width()
         canvas_height = self.canvas.winfo_height()
         x = canvas_width // 2 if canvas_width > 1 else 300
@@ -395,18 +450,15 @@ class PixelArtApp(ctk.CTk):
 
         scale = self.zoom_var.get()
 
-        # Resize avec NEAREST (instantané)
         img = self.base_image.resize(
             (self.width * scale, self.height * scale), Image.Resampling.NEAREST
         )
 
         self.preview_image = ImageTk.PhotoImage(img)
 
-        # Supprimer ancienne image si existe
         if self.canvas_image_id:
             self.canvas.delete(self.canvas_image_id)
 
-        # Placer l'image à la position spécifiée
         self.canvas_image_id = self.canvas.create_image(
             x, y, image=self.preview_image, anchor="center"
         )
@@ -419,7 +471,6 @@ class PixelArtApp(ctk.CTk):
     def show_success(self, message):
         """Affiche un message de succès"""
         self.message_label.configure(text=message, text_color="#44ff44")
-        # Effacer après 3 secondes
         self.after(3000, lambda: self.message_label.configure(text=""))
 
     def animate_message(self):
@@ -427,11 +478,10 @@ class PixelArtApp(ctk.CTk):
 
         def blink(count=0):
             if count < 6:
-                # Utiliser gris foncé au lieu de transparent
                 if count % 2 == 0:
                     self.message_label.configure(text_color="#ff4444")
                 else:
-                    self.message_label.configure(text_color="#2b2b2b")  # Fond sombre
+                    self.message_label.configure(text_color="#2b2b2b")
                 self.after(200, lambda: blink(count + 1))
             else:
                 self.message_label.configure(text_color="#ff4444")
