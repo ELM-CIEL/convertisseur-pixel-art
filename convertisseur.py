@@ -2,7 +2,7 @@ from PIL import Image, ImageDraw
 import json
 
 
-def image_matrice(image_path, target_size=24):
+def image_vers_matrice(image_path, target_size=24):
     """Convertit une image en matrice + redimensionnement"""
     img = Image.open(image_path)
 
@@ -73,7 +73,7 @@ if __name__ == "__main__":
     chemin = input("Chemin de l'image : ")
     taille = input("Taille demandée (16, 24, 32) [24 par défaut] : ") or "24"
 
-    matrice, w, h = image_matrice(chemin, int(taille))
+    matrice, w, h = image_vers_matrice(chemin, int(taille))
     print(f"Matrice créée ! {w}x{h} pixels")
 
     # Générer les fichiers

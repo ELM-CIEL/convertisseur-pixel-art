@@ -60,24 +60,24 @@ def trouver_couleur_proche(r, g, b, palette):
     return meilleure_couleur + 1
 
 
-def image_vers_matrice(image_path, target_size=24, nb_couleurs=5):
+def image_vers_matrice_simple(image_path, target_size=24, nb_couleurs=5):
     """Convertit une image en matrice avec quantification optimale"""
     img = Image.open(image_path)
 
-    # ✅ AJOUT : Recadrage automatique
+    # Recadrage automatique
     if img.mode == "RGBA" or img.mode == "LA":
         bbox = img.getbbox()
         if bbox:
             img = img.crop(bbox)
 
-    # ✅ CHANGEMENT : LANCZOS pour courbes douces
+    # LANCZOS pour courbes douces
     img = img.resize((target_size, target_size), Image.Resampling.LANCZOS)
 
     # Convertir en RGBA
     if img.mode != "RGBA":
         img = img.convert("RGBA")
 
-    # ✅ AJOUT : Seuillage alpha strict pour contours nets
+    # Seuillage alpha strict pour contours nets
     for y in range(img.height):
         for x in range(img.width):
             r, g, b, a = img.getpixel((x, y))
@@ -165,7 +165,9 @@ if __name__ == "__main__":
     taille = input("Taille (16, 24, 32) [24 par défaut] : ") or "24"
     nb_couleurs = input("Nombre de couleurs (2-10) [5 par défaut] : ") or "5"
 
-    matrice, w, h, palette = image_vers_matrice(chemin, int(taille), int(nb_couleurs))
+    matrice, w, h, palette = image_vers_matrice_simple(
+        chemin, int(taille), int(nb_couleurs)
+    )
     print(f"Matrice créée ! {w}x{h} avec {len(palette)} couleurs")
 
     # Générer les fichiers
