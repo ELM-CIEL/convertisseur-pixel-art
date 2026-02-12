@@ -1,4 +1,4 @@
-from PIL import Image
+from PIL import Image, ImageDraw
 import json
 
 
@@ -7,7 +7,7 @@ def image_matrice(image_path, target_size=16):
     img = Image.open(image_path)
 
     # Redimensionner l'image
-    img = img.resize((target_size, target_size), Image.Resampling.LANCZOS)
+    img = img.resize((target_size, target_size), Image.Resampling.NEAREST)
 
     # Convertir en RGBA pour gérer la transparence
     if img.mode != "RGBA":
@@ -22,92 +22,60 @@ def image_matrice(image_path, target_size=16):
         ligne = []
         for x in range(width):
             r, g, b, a = img.getpixel((x, y))
-            ligne.append((r, g, b, a))
+            ligne.append([r, g, b, a])
         matrice.append(ligne)
 
     return matrice, width, height
 
 
-def generer_html(matrice, width, height, nom_fichier="pixel_art.html"):
-    """Génère un fichier HTML avec la matrice de pixels"""
+def sauvegarder_matrice(matrice, width, height, nom_fichier="matrice"):
+    """Sauvegarde la matrice en JSON et JS"""
 
-    # Convertir les tuples en listes pour JSON
-    matrice_json = json.dumps(matrice)
+    # JSON
+    data = {"width": width, "height": height, "pixel": matrice}
+    with open(f"{nom_fichier}.json", "w") as f:
+        json.dump(data, f, indent=2)
+    print(f"Fichier JSON : {nom_fichier}.json")
 
-    html = f"""<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pixel Art - {width}x{height}</title>
-    <style>
-        body {{
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background: #1a1a1a;
-            font-family: Arial, sans-serif;
-        }}
-        .container {{
-            text-align: center;
-        }}
-        h1 {{
-            color: #fff;
-            margin-bottom: 20px;
-        }}
-        #canvas {{
-            border: 2px solid #333;
-            image-rendering: pixelated;
-            image-rendering: crisp-edges;
-        }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Pixel Art {width}x{height}</h1>
-        <canvas id="canvas" width="{width}" height="{height}"></canvas>
-    </div>
+    # JavaScript
+    with open(f"{nom_fichier}.js", "w") as f:
+        f.write(f"const pixel = {json.dumps(matrice)};\n")
+        f.write(f"const width = {width};\n")
+        f.write(f"const height = {height};\n")
+    print(f"Fichier JS : {nom_fichier}.js")
 
-    <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        // Matrice de pixels
-        const pixels = {matrice_json};
-        
-        // Dessiner chaque pixel
-        for (let y = 0; y < {height}; y++) {{
-            for (let x = 0; x < {width}; x++) {{
-                const [r, g, b, a] = pixels[y][x];
-                ctx.fillStyle = `rgba(${{r}}, ${{g}}, ${{b}}, ${{a / 255}})`;
-                ctx.fillRect(x, y, 1, 1);
-            }}
-        }}
-        
-        // Agrandir le canvas pour mieux voir
-        canvas.style.width = '{width * 20}px';
-        canvas.style.height = '{height * 20}px';
-    </script>
-</body>
-</html>"""
 
-    # Sauvegarder le fichier
-    with open(nom_fichier, "w", encoding="utf-8") as f:
-        f.write(html)
+def generer_image(matrice, width, height, nom_fichier="pixel_art.png", scale=20):
+    """Génère une image PNG avec la matrice de pixels"""
 
-    print(f"✅ Fichier généré : {nom_fichier}")
+    # Créer une image agrandie
+    img_sortie = Image.new("RGBA", (width * scale, height * scale), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img_sortie)
+
+    # Dessiner chaque pixel
+    for y in range(height):
+        for x in range(width):
+            r, g, b, a = matrice[y][x]
+
+            x1 = x * scale
+            y1 = y * scale
+            x2 = x1 + scale
+            y2 = y1 + scale
+
+            draw.rectangle([x1, y1, x2, y2], fill=(r, g, b, a))
+
+    img_sortie.save(nom_fichier)
+    print(f"Image générée : {nom_fichier}")
 
 
 # Test
 if __name__ == "__main__":
-    chemin = input("Chemin de l'image :")
-    taille = input("Taille demandée (16, 24, 32) [16 par défaut] :") or "16"
+    chemin = input("Chemin de l'image : ")
+    taille = input("Taille demandée (16, 24, 32) [16 par défaut] : ") or "16"
 
     matrice, w, h = image_matrice(chemin, int(taille))
     print(f"Matrice créée ! {w}x{h} pixels")
-    print("Premiers pixels :", matrice[0][:3])
 
-    # Générer le HTML
-    generer_html(matrice, w, h)
+    # Générer les fichiers
+    sauvegarder_matrice(matrice, w, h)
+    generer_image(matrice, w, h)
