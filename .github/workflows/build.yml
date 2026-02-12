@@ -3,85 +3,91 @@ name: Build Executable
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+    tags:
+      - "v*"
   workflow_dispatch:
 
 jobs:
   build-windows:
     runs-on: windows-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller customtkinter pillow numpy
-
       - name: Build executable
         run: |
-          pyinstaller --onefile --windowed --name="PixelArtConverter" app.py
-
+          pyinstaller --onefile --windowed --icon=icon.ico --name="PixelArtConverter" app.py
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: PixelArtConverter-Windows
           path: dist/PixelArtConverter.exe
+          compression-level: 0
 
   build-linux:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller customtkinter pillow numpy
-
       - name: Build executable
         run: |
           pyinstaller --onefile --windowed --name="PixelArtConverter" app.py
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: PixelArtConverter-Linux
           path: dist/PixelArtConverter
+          compression-level: 0
 
   build-macos:
     runs-on: macos-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller customtkinter pillow numpy
-
       - name: Build executable
         run: |
           pyinstaller --onefile --windowed --name="PixelArtConverter" app.py
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: PixelArtConverter-macOS
           path: dist/PixelArtConverter
+          compression-level: 0
+
+  create-release:
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/PixelArtConverter-Windows/PixelArtConverter.exe
+            artifacts/PixelArtConverter-Linux/PixelArtConverter
+            artifacts/PixelArtConverter-macOS/PixelArtConverter
