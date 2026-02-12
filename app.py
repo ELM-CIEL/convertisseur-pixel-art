@@ -138,12 +138,16 @@ class PixelArtApp(ctk.CTk):
             command=self.convert_image,
             font=("Helvetica", 14, "bold"),
             height=40,
+            width=200,
         )
-        convert_btn.pack(pady=20)
+        convert_btn.pack(pady=(20, 10))
 
         # Frame pour l'export
-        export_frame = ctk.CTkFrame(self, fg_color="transparent")
-        export_frame.pack(pady=(0, 20))
+        export_container = ctk.CTkFrame(self, fg_color="transparent")
+        export_container.pack(pady=(0, 20))
+
+        export_frame = ctk.CTkFrame(export_container, fg_color="transparent")
+        export_frame.pack(padx=(0, 45))
 
         # Label format
         ctk.CTkLabel(export_frame, text="Format :", font=("Helvetica", 12)).pack(
@@ -157,8 +161,22 @@ class PixelArtApp(ctk.CTk):
             values=["JSON", "JS", "Image PNG"],
             variable=self.export_format_var,
             width=120,
+            command=self.on_format_change,
         )
         export_format_menu.pack(side="left", padx=5)
+
+        # Label et menu scale
+        self.scale_label = ctk.CTkLabel(
+            export_frame, text="Taille :", font=("Helvetica", 12)
+        )
+
+        self.scale_var = ctk.StringVar(value="10x")
+        self.scale_menu = ctk.CTkOptionMenu(
+            export_frame,
+            values=["5x", "10x", "20x", "30x", "50x"],
+            variable=self.scale_var,
+            width=80,
+        )
 
         # Bouton Exporter
         self.export_btn = ctk.CTkButton(
@@ -217,6 +235,15 @@ class PixelArtApp(ctk.CTk):
     def on_canvas_resize(self, event):
         """Gère le redimensionnement du canvas"""
         pass
+
+    def on_format_change(self, choice):
+        """Affiche le menu scale si Image PNG est sélectionné"""
+        if choice == "Image PNG":
+            self.scale_label.pack(side="left", padx=(10, 5))
+            self.scale_menu.pack(side="left", padx=5)
+        else:
+            self.scale_label.pack_forget()
+            self.scale_menu.pack_forget()
 
     def start_drag(self, event):
         """Démarre le drag"""
@@ -364,6 +391,33 @@ class PixelArtApp(ctk.CTk):
         except Exception as e:
             self.show_error(f"❌ Erreur export : {str(e)}")
 
+    def export_json(self):
+        """Exporte en JSON"""
+        file_path = filedialog.asksaveasfilename(
+            title="Exporter JSON",
+            defaultextension=".json",
+            filetypes=[("JSON", "*.json"), ("Tous", "*.*")],
+        )
+
+        if not file_path:
+            return
+
+        if self.algo_var.get() == "simple":
+            data = {"width": self.width, "height": self.height, "pixel": self.matrice}
+        else:
+            palette_rgb = [f"rgb({r}, {g}, {b})" for r, g, b in self.palette]
+            data = {
+                "width": self.width,
+                "height": self.height,
+                "pixel": self.matrice,
+                "palette": palette_rgb,
+            }
+
+        with open(file_path, "w") as f:
+            json.dump(data, f, indent=2)
+
+        self.show_success(f"Exporté : {file_path.split('/')[-1].split(chr(92))[-1]}")
+
     def export_js(self):
         """Exporte en JS"""
         file_path = filedialog.asksaveasfilename(
@@ -397,10 +451,21 @@ class PixelArtApp(ctk.CTk):
         if not file_path:
             return
 
-        # Utiliser l'image de base (taille réelle, pas zoomée)
-        self.base_image.save(file_path, "PNG")
+        # Récupérer le facteur de scale (ex: "10x" -> 10)
+        scale_factor = int(self.scale_var.get().replace("x", ""))
 
-        self.show_success(f"Exporté : {file_path.split('/')[-1].split(chr(92))[-1]}")
+        # Upscaler l'image de base avec NEAREST
+        upscaled = self.base_image.resize(
+            (self.width * scale_factor, self.height * scale_factor),
+            Image.Resampling.NEAREST,
+        )
+
+        upscaled.save(file_path, "PNG")
+
+        final_size = f"{self.width * scale_factor}x{self.height * scale_factor}"
+        self.show_success(
+            f"Exporté : {file_path.split('/')[-1].split(chr(92))[-1]} ({final_size})"
+        )
 
     def creer_image_base(self):
         """Crée l'image de base en taille réelle"""
