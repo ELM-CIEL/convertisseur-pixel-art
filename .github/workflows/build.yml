@@ -26,7 +26,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PixelArtConverter-Windows
+          name: PixelArtConverter-Windows.exe
           path: dist/PixelArtConverter.exe
           compression-level: 0
 
@@ -44,12 +44,12 @@ jobs:
           pip install pyinstaller customtkinter pillow numpy
       - name: Build executable
         run: |
-          pyinstaller --onefile --windowed --name="PixelArtConverter" app.py
+          pyinstaller --onefile --windowed --name="PixelArtConverter-Linux" app.py
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: PixelArtConverter-Linux
-          path: dist/PixelArtConverter
+          path: dist/PixelArtConverter-Linux
           compression-level: 0
 
   build-macos:
@@ -66,12 +66,12 @@ jobs:
           pip install pyinstaller customtkinter pillow numpy
       - name: Build executable
         run: |
-          pyinstaller --onefile --windowed --name="PixelArtConverter" app.py
+          pyinstaller --onefile --windowed --name="PixelArtConverter-macOS" app.py
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: PixelArtConverter-macOS
-          path: dist/PixelArtConverter
+          path: dist/PixelArtConverter-macOS
           compression-level: 0
 
   create-release:
@@ -84,10 +84,9 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+          merge-multiple: true
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            artifacts/PixelArtConverter-Windows/PixelArtConverter.exe
-            artifacts/PixelArtConverter-Linux/PixelArtConverter
-            artifacts/PixelArtConverter-macOS/PixelArtConverter
+          files: artifacts/*
