@@ -154,7 +154,7 @@ python app.py
 
 ## 🛠️ Technologies
 
-- Python 3.11
+- [Python](https://www.python.org/downloads/)
 - [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) - Interface moderne
 - [Pillow](https://python-pillow.org/) - Traitement d'images
 - [NumPy](https://numpy.org/) - Calculs matriciels
@@ -175,7 +175,7 @@ MIT License - voir [LICENSE](LICENSE)
 
 <div align="center">
 
-💝 **Développé avec ❤️ en Python**
+**Développé avec <3 par [@ELM-CIEL](https://github.com/ELM-CIEL)**
 
 [![Build](https://github.com/ELM-CIEL/convertisseur-pixel-art/actions/workflows/build.yml/badge.svg)](https://github.com/ELM-CIEL/convertisseur-pixel-art/actions)
 [![Release](https://img.shields.io/github/v/release/ELM-CIEL/convertisseur-pixel-art)](https://github.com/ELM-CIEL/convertisseur-pixel-art/releases)
